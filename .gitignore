@@ -1,0 +1,43 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+*.db
+.venv/
+
+# ---- 测试/覆盖率 ----
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ---- Lint/Type ----
+.ruff_cache/
+.mypy_cache/
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---- 环境变量 ----
+.env
+
+# ---- Docker 数据卷 ----
+tmp/
+
+# ---- 面试材料（不上传）----
+docs/INTERVIEW.md
+docs/RESUME.md
+docs/VERIFICATION.md
+
+# ---- 开发工具脚本（不上传）----
+scripts/test_connections.py
+
+# ---- ZCode ----
+.zcode/
