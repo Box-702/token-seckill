@@ -93,7 +93,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="TokenSeckill · 限量 Token 套餐高并发秒杀平台",
     version="0.1.0",
-    description="面向 AI Agent 的限量 Token 套餐高并发秒杀平台：Redis Lua 原子发放、异步落库、延时取消、多维限流与 SSE 实时库存推送",
+    description=(
+        "面向 AI Agent 的限量 Token 套餐高并发秒杀平台："
+        "Redis Lua 原子发放、异步落库、延时取消、多维限流与 SSE 实时库存推送"
+    ),
     lifespan=lifespan,
 )
 # 注册中间件（Starlette 按注册的逆序执行：Metrics -> RequestCache）

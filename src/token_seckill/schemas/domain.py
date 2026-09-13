@@ -5,7 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from token_seckill.db.models import ActivityStatus, OrderStatus
 
-
 # ---- 请求模型 ----
 
 class CreateUserRequest(BaseModel):
