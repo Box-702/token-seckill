@@ -20,6 +20,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql.type_api import TypeEngine
 
 from token_seckill.db.base import Base
 
@@ -34,6 +35,31 @@ def _enum_values(enum_cls: type[StrEnum]) -> list[str]:
     同一个状态在数据库和 Redis 中词汇表一致，避免手写 SQL 查不到数据。
     """
     return [member.value for member in enum_cls]
+
+
+def _status_enum(enum_cls: type[StrEnum], name: str) -> TypeEngine[str]:
+    """状态枚举列类型：落库小写值，并用 CHECK 约束拒绝非法取值
+
+    MySQL 表默认的 utf8mb4_unicode_ci 排序规则大小写不敏感，`status IN (...)` 这个
+    CHECK 会把 'ONLINE' 当成 'online' 放行；但 ORM 只认小写值，读到 'ONLINE' 会抛
+    LookupError。因此 MySQL 上改用二进制排序规则让 CHECK 严格匹配大小写，
+    SQLite 等方言没有这个坑，保持默认。
+    """
+
+    def _build(collation: str | None) -> Enum:
+        enum_type = Enum(
+            enum_cls,
+            native_enum=False,
+            length=16,
+            create_constraint=True,
+            name=name,
+            values_callable=_enum_values,
+        )
+        # Enum 的构造函数会忽略 collation 参数，只能在构造后赋值
+        enum_type.collation = collation
+        return enum_type
+
+    return _build(None).with_variant(_build("utf8mb4_bin"), "mysql")
 
 
 class ActivityStatus(StrEnum):
@@ -108,14 +134,7 @@ class SeckillActivity(Base):
     db_stock: Mapped[int] = mapped_column(Integer)           # 数据库侧库存（异步落库时扣减）
     per_user_limit: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
     status: Mapped[ActivityStatus] = mapped_column(
-        Enum(
-            ActivityStatus,
-            native_enum=False,
-            length=16,
-            create_constraint=True,
-            name="activity_status",
-            values_callable=_enum_values,
-        ),
+        _status_enum(ActivityStatus, "activity_status"),
         default=ActivityStatus.DRAFT,
         server_default=text("'draft'"),
     )
@@ -144,14 +163,7 @@ class GrantOrder(Base):
     sku_id: Mapped[int] = mapped_column(ForeignKey("token_skus.id"))
     token_amount: Mapped[int] = mapped_column(BigInteger)
     status: Mapped[OrderStatus] = mapped_column(
-        Enum(
-            OrderStatus,
-            native_enum=False,
-            length=16,
-            create_constraint=True,
-            name="order_status",
-            values_callable=_enum_values,
-        ),
+        _status_enum(OrderStatus, "order_status"),
         default=OrderStatus.PROCESSING,
         server_default=text("'processing'"),
     )

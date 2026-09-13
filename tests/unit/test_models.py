@@ -96,7 +96,11 @@ async def test_enum_status_is_persisted_as_lowercase_value() -> None:
 
 @pytest.mark.asyncio
 async def test_status_check_constraint_rejects_unknown_value() -> None:
-    """CHECK 约束在数据库层拒绝非法状态，不再依赖应用层自觉"""
+    """CHECK 约束在数据库层拒绝非法状态，不再依赖应用层自觉
+
+    SQLite 默认二进制排序规则本身就大小写敏感；MySQL 默认 utf8mb4_unicode_ci 会放行
+    'ONLINE'，因此模型对 MySQL 指定了 utf8mb4_bin（见 _status_enum）。
+    """
     engine = await _create_engine()
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     await _seed(session_factory)
