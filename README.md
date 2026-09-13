@@ -38,8 +38,6 @@ flowchart LR
     H --> API
 ```
 
-更完整的设计与 Java 到 Python 映射见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-
 ## 技术栈
 
 - Python 3.12+、FastAPI、Pydantic
@@ -112,9 +110,3 @@ LLM_MODEL=your-tool-calling-model
 - SSE 库存推送与三级限流的行为验证码属于可演示工程，万级连接与压测指标未实测，不在文档中声称。
 - 数据库表在 demo 启动时自动创建；正式部署应接入 Alembic 迁移和密钥管理。
 - Memcached 是为了复现参考架构而保留的可选层。多数中小规模部署使用“请求缓存 + 本地缓存 + Redis + MySQL”已经足够。
-
-## 简历与面试材料
-
-- [简历项目描述](docs/RESUME.md)
-- [架构与关键决策](docs/ARCHITECTURE.md)
-- [面试讲解提纲](docs/INTERVIEW.md)

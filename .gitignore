@@ -32,9 +32,7 @@ htmlcov/
 tmp/
 
 # ---- 面试材料（不上传）----
-docs/INTERVIEW.md
-docs/RESUME.md
-docs/VERIFICATION.md
+docs/
 
 # ---- 开发工具脚本（不上传）----
 scripts/test_connections.py
