@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +25,15 @@ from token_seckill.db.base import Base
 
 # 主键类型：MySQL 使用 BigInteger，SQLite 降级为 Integer
 PK_INT = BigInteger().with_variant(Integer, "sqlite")
+
+
+def _enum_values(enum_cls: type[StrEnum]) -> list[str]:
+    """让 SQLAlchemy 持久化枚举成员的小写值（draft），而不是大写成员名（DRAFT）
+
+    Redis Lua、Redis 订单 Hash 与 API 响应使用的都是小写值，统一后
+    同一个状态在数据库和 Redis 中词汇表一致，避免手写 SQL 查不到数据。
+    """
+    return [member.value for member in enum_cls]
 
 
 class ActivityStatus(StrEnum):
@@ -46,10 +56,13 @@ class OrderStatus(StrEnum):
 class User(Base):
     """用户表"""
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("token_balance >= 0", name="token_balance_nonnegative"),
+    )
 
     id: Mapped[int] = mapped_column(PK_INT, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    token_balance: Mapped[int] = mapped_column(BigInteger, default=0)
+    token_balance: Mapped[int] = mapped_column(BigInteger, default=0, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     orders: Mapped[list[GrantOrder]] = relationship(back_populates="user")
@@ -67,10 +80,12 @@ class TokenSku(Base):
     id: Mapped[int] = mapped_column(PK_INT, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200))
     token_amount: Mapped[int] = mapped_column(BigInteger)
-    price_cents: Mapped[int] = mapped_column(Integer, default=0)
-    validity_days: Mapped[int] = mapped_column(Integer, default=30)
-    allowed_models: Mapped[list[str]] = mapped_column(JSON, default=list)
-    active: Mapped[bool] = mapped_column(default=True)
+    price_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    validity_days: Mapped[int] = mapped_column(Integer, default=30, server_default=text("30"))
+    allowed_models: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("(JSON_ARRAY())")
+    )
+    active: Mapped[bool] = mapped_column(default=True, server_default=text("1"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     activities: Mapped[list[SeckillActivity]] = relationship(back_populates="sku")
@@ -91,11 +106,21 @@ class SeckillActivity(Base):
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     initial_stock: Mapped[int] = mapped_column(Integer)
     db_stock: Mapped[int] = mapped_column(Integer)           # 数据库侧库存（异步落库时扣减）
-    per_user_limit: Mapped[int] = mapped_column(Integer, default=1)
+    per_user_limit: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
     status: Mapped[ActivityStatus] = mapped_column(
-        Enum(ActivityStatus, native_enum=False, length=16), default=ActivityStatus.DRAFT
+        Enum(
+            ActivityStatus,
+            native_enum=False,
+            length=16,
+            create_constraint=True,
+            name="activity_status",
+            values_callable=_enum_values,
+        ),
+        default=ActivityStatus.DRAFT,
+        server_default=text("'draft'"),
     )
-    version: Mapped[int] = mapped_column(Integer, default=1)  # 乐观锁版本号
+    # 修订号：每次 publish 自增，用于缓存失效与客户端判断配置是否变更（非并发控制手段）
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -115,11 +140,20 @@ class GrantOrder(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)  # 雪花 ID
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    activity_id: Mapped[int] = mapped_column(ForeignKey("seckill_activities.id"))
+    activity_id: Mapped[int] = mapped_column(ForeignKey("seckill_activities.id"), index=True)
     sku_id: Mapped[int] = mapped_column(ForeignKey("token_skus.id"))
     token_amount: Mapped[int] = mapped_column(BigInteger)
     status: Mapped[OrderStatus] = mapped_column(
-        Enum(OrderStatus, native_enum=False, length=16), default=OrderStatus.PROCESSING
+        Enum(
+            OrderStatus,
+            native_enum=False,
+            length=16,
+            create_constraint=True,
+            name="order_status",
+            values_callable=_enum_values,
+        ),
+        default=OrderStatus.PROCESSING,
+        server_default=text("'processing'"),
     )
     failure_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -157,5 +191,7 @@ class AgentRun(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     input_text: Mapped[str] = mapped_column(Text)
     output_text: Mapped[str] = mapped_column(Text)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, server_default=text("(JSON_OBJECT())")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
